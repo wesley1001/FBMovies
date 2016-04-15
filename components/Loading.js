@@ -6,6 +6,7 @@ import React, {
   View,
   Image,
 } from 'react-native';
+import BackgroundImageContainer from './BackgroundImageContainer';
 
 class Loading extends Component {
   constructor(props) {
@@ -18,24 +19,20 @@ class Loading extends Component {
 
   render() {
     return (
-      <Image
-        source={require('../assets/images/camerasBackground.jpg')}
-        style={[this.props.containerStyle, styles.backgroundImage]}>
+      <BackgroundImageContainer
+        image={require('../assets/images/camerasBackground.jpg')}>
         <View>
           <Text style={styles.text}>Loading...</Text>
         </View>
-      </Image>
+      </BackgroundImageContainer>
     );
   }
 }
 
 const styles = StyleSheet.create({
-  backgroundImage: {
-    width: null,
-    height: null,
-  },
   text: {
     fontSize: 48,
+    fontFamily: 'Park Lane NF',
     color: 'rgba(255,255,255,0.8)',
     backgroundColor: 'rgba(0,0,0,0)',
   },

@@ -8,18 +8,15 @@ import React, {
   Animated,
   PanResponder,
 } from 'react-native';
-import Loading from './Loading';
+import Poster from './Poster';
+import { connect } from 'react-redux';
+import { chooseMovie } from '../actions';
+import BackgroundImageContainer from './BackgroundImageContainer';
 
-import config from '../config';
-
-const PARAMS = '?apikey=' + config.API_KEY + '&page_limit=' + config.PAGE_SIZE;
-const REQUEST_URL = config.API_URL + PARAMS;
-
-class MovieList extends Component {
+class Movies extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      loaded: false,
       currentMovie: 0,
       enter: new Animated.Value(0.5),
       pan: new Animated.ValueXY(),
@@ -36,7 +33,7 @@ class MovieList extends Component {
           x: this.state.pan.x._value,
           y: this.state.pan.y._value,
         });
-        this.state.pan.setValue({x: 0, y: 0});
+        this.state.pan.setValue({ x: 0, y: 0 });
       },
 
       // It's not super obvious, the but null at index
@@ -44,25 +41,30 @@ class MovieList extends Component {
       // We only choose to prove a dx update to ensure our
       // movie card can only go left or right.
       onPanResponderMove: Animated.event([
-        null, {dx: this.state.pan.x},
+        null, { dx: this.state.pan.x },
       ]),
 
-      onPanResponderRelease: (event, {vx}) => {
+      onPanResponderRelease: (event, { vx, vy }) => {
         // Simple attempt for demo purposes,
         // if velocity of card is > arbitary vx,
         // note that card as 'swiped'
-        let velocity = Math.abs(vx);
+        let absoluteVelocity = Math.abs(vx);
 
         // Temporary magic numbers given below that 'feel OK'
         // Would love to know what the actual units are...
-        if (velocity > 1) {
+        const { dispatch, movies } = this.props;
+        if (absoluteVelocity > 1) {
+          if (vx > 1) {
+            dispatch(chooseMovie(movies[this.state.currentMovie]));
+          };
+
           Animated.decay(this.state.pan, {
-            velocity: {x: 10, y: 10},
+            velocity: { x: vx, y: vy },
             deceleration: 0.98,
           }).start(this.showNextMovie);
         } else {
           Animated.spring(this.state.pan, {
-            toValue: {x: 0, y: 0},
+            toValue: { x: 0, y: 0 },
             friction: 4,
           }).start();
         }
@@ -70,30 +72,9 @@ class MovieList extends Component {
     });
   }
 
-  async componentDidMount() {
-    await this.fetchMovies();
+  componentDidMount() {
     this.animateCardEntrance();
   }
-
-  async fetchMovies() {
-    let response = await fetch(REQUEST_URL);
-    let responseJson = await response.json();
-    let sortedMovies = this.sortDataByAudienceScore(responseJson.movies);
-    this.setState({
-      movies: sortedMovies,
-      loaded: true,
-    });
-  }
-
-  // RT API requires use of snake_case
-  //jscs: disable requireCamelCaseOrUpperCaseIdentifiers
-  sortDataByAudienceScore(movies) {
-    return movies.sort((a, b)  => {
-      return b.ratings.audience_score - a.ratings.audience_score;
-    });
-
-    return sortedMovies;
-  }//jscs: enable requireCamelCaseOrUpperCaseIdentifiers
 
   animateCardEntrance() {
     Animated.spring(
@@ -104,86 +85,82 @@ class MovieList extends Component {
 
   getNextMovie()  {
     let nextMovieIndex = this.state.currentMovie + 1;
-    if (nextMovieIndex >= this.state.movies.length) {
-      this.setState({currentMovie: 0});
+    if (nextMovieIndex >= this.props.movies.length) {
+      this.setState({ currentMovie: 0 });
     } else {
-      this.setState({currentMovie: nextMovieIndex});
+      this.setState({ currentMovie: nextMovieIndex });
     }
   };
 
   showNextMovie = () => {
-    this.state.pan.setValue({x: 0, y: 0});
+    this.state.pan.setValue({ x: 0, y: 0 });
     this.state.enter.setValue(0);
     this.getNextMovie();
     this.animateCardEntrance();
   };
 
-  renderMovie(movie) {
+  render() {
+    let movie = this.props.movies[this.state.currentMovie];
+
     let rotate = this.state.pan.x.interpolate({
       inputRange: [-200, 0, 200],
       outputRange: ['-30deg', '0deg', '30deg'],
     });
+
     let animatedCardStyles = {
       transform: [
-        {translateX: this.state.pan.x},
-        {translateY: this.state.pan.y},
-        {rotate: rotate},
-        {scale: this.state.enter},
+        { translateX: this.state.pan.x },
+        { translateY: this.state.pan.y },
+        { rotate: rotate },
+        { scale: this.state.enter },
       ],
       opacity: 1,
     };
 
     return (
-      <View style={styles.container}>
+      <BackgroundImageContainer
+        image={require('../assets/images/patternBackground.png')}>
         <Animated.View
-          style={[styles.card, animatedCardStyles]}
-          {...this.panResponder.panHandlers}>
-          <Image
-            source={{uri: movie.posters.thumbnail}}
-            style={styles.thumbnail}
-          />
-          <View style={styles.rightContainer}>
+        style={[styles.card, animatedCardStyles]}
+        {...this.panResponder.panHandlers}>
+          <Poster uri={movie.mdbPosterUri || movie.posters.thumbnail}  />
+          <View style={styles.detailContainer}>
             <Text style={styles.title}>{movie.title}</Text>
-            <Text style={styles.score}>{movie.ratings.audience_score}%</Text>
+            <View style={styles.scoreContainer}>
+              <Image
+              source={require('../assets/images/rtIcon.png')}
+              style={styles.icon}
+              />
+              <Text style={styles.score}>
+                { movie.ratings.audience_score }%
+              </Text>
+            </View>
           </View>
         </Animated.View>
-      </View>
+      </BackgroundImageContainer>
     );
   };
-
-  render() {
-    if (!this.state.loaded) {
-      return <Loading containerStyle={styles.container}/>;
-    }
-
-    return this.renderMovie(this.state.movies[this.state.currentMovie]);
-  };
 }
+Movies = connect()(Movies);
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#bcd5d1',
-  },
   card: {
+    flex: 1,
+    flexDirection: 'column',
     shadowOffset:{
       width: 10,
       height: 10,
     },
     backgroundColor: '#1d2120',
+    borderRadius: 20,
     elevation: 20,
-    flex: 1,
     shadowColor: 'black',
     shadowOpacity: 1.0,
     margin: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
   },
-  rightContainer: {
+  detailContainer: {
     flex: 1,
+    padding: 20,
   },
   title: {
     fontSize: 20,
@@ -191,14 +168,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#ba9077',
   },
-  score: {
-    textAlign: 'center',
-    color: '##5a5c51',
+  scoreContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
-  thumbnail: {
-    width: 53,
-    height: 81,
+  score: {
+    color: '#5a5c51',
+  },
+  icon: {
+    height: 15,
+    width: 15,
+    marginRight: 5,
   },
 });
 
-export default MovieList;
+export default Movies;
